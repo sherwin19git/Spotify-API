@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Web API Integration</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Spotify Web Playback SDK -->
+        <script src="https://sdk.scdn.co/spotify-player.js"></script>
+
+        <!-- Player Container -->
+        <div id="playerContainer" class="player-container" style="display: none;">
+            <div class="player-info">
+                <div class="player-artwork">
+                    <img id="playerArtwork" src="" alt="Album artwork" class="player-image">
+                </div>
+                <div class="player-details">
+                    <p id="playerTrackName" class="player-track">No track playing</p>
+                    <p id="playerArtistName" class="player-artist">-</p>
+                    <div class="player-progress">
+                        <div id="playerProgressBar" class="progress-bar"></div>
+                    </div>
+                    <div class="player-time">
+                        <span id="playerCurrentTime">0:00</span> / <span id="playerDuration">0:00</span>
+                    </div>
+                </div>
+            </div>
+            <div class="player-controls">
+                <button id="playerPrev" class="player-btn">⏮</button>
+                <button id="playerPlay" class="player-btn player-play-btn">▶</button>
+                <button id="playerNext" class="player-btn">⏭</button>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <header class="header">
+            <div class="logo-section">
+                <h1>🎵 Spotify API Explorer</h1>
+                <p>Search for your favorite tracks, artists, and playlists</p>
+            </div>
+        </header>
+
+        <!-- User Profile Section (Hidden until authenticated) -->
+        <section class="profile-section" id="profileSection" style="display: none;">
+            <div class="profile-container">
+                <div class="profile-avatar">
+                    <img id="profileImage" src="" alt="Profile picture" class="profile-pic">
+                </div>
+                <div class="profile-info">
+                    <h2 id="profileName">User</h2>
+                    <p id="profileEmail" class="profile-email">-</p>
+                    <div class="profile-stats">
+                        <div class="stat">
+                            <span class="stat-label">Followers</span>
+                            <span id="profileFollowers" class="stat-value">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Plan</span>
+                            <span id="profilePlan" class="stat-value">Premium</span>
+                        </div>
+                    </div>
+                    <button id="logoutBtn" class="btn btn-logout">Disconnect</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Authentication Section -->
+        <section class="auth-section" id="authSection">
+            <div class="auth-container">
+                <h2>Step 1: Authentication</h2>
+                <p>To use this application, you need to authenticate with Spotify using OAuth 2.0.</p>
+                <button id="authBtn" class="btn btn-primary">Connect to Spotify</button>
+                <p id="authStatus" class="auth-status"></p>
+            </div>
+        </section>
+
+        <!-- Main Content (Hidden until authenticated) -->
+        <main class="main-content" id="mainContent" style="display: none;">
+            <!-- Search Section -->
+            <section class="search-section">
+                <div class="search-container">
+                    <h2>Search Spotify</h2>
+                    <form id="searchForm" class="search-form">
+                        <div class="input-group">
+                            <input 
+                                type="text" 
+                                id="searchInput" 
+                                class="search-input" 
+                                placeholder="Search for artists, tracks, or albums..."
+                                maxlength="100"
+                            >
+                            <button type="submit" id="searchBtn" class="btn btn-search">Search</button>
+                        </div>
+                        <div class="filter-options">
+                            <label>
+                                <input type="radio" name="searchType" value="track" checked>
+                                Tracks
+                            </label>
+                            <label>
+                                <input type="radio" name="searchType" value="artist">
+                                Artists
+                            </label>
+                            <label>
+                                <input type="radio" name="searchType" value="album">
+                                Albums
+                            </label>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                <div class="spinner"></div>
+                <p>Loading...</p>
+            </div>
+
+            <!-- Error Message Container -->
+            <div id="errorContainer" class="error-container" style="display: none;">
+                <span id="errorMessage"></span>
+                <button class="btn-close" onclick="closeError()">✕</button>
+            </div>
+
+            <!-- Playlists Section -->
+            <section class="playlists-section" id="playlistsSection" style="display: none;">
+                <div class="playlists-container">
+                    <h2>Your Playlists</h2>
+                    <div id="playlistsContainer" class="playlists-grid">
+                        <p id="noPlaylists" class="no-playlists">No playlists found.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Container -->
+            <section class="results-section">
+                <div id="resultsContainer" class="results-container">
+                    <div id="noResults" class="no-results" style="display: none;">
+                        <p>🔍 No results found. Try a different search.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
