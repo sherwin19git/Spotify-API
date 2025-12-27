@@ -3,12 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://sdk.scdn.co; connect-src 'self' https://accounts.spotify.com https://api.spotify.com https://sdk.scdn.co; img-src 'self' https:; style-src 'self' 'unsafe-inline'">
     <title>Spotify Web API Integration</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <!-- Spotify Web Playback SDK -->
+        <!-- Load config and script BEFORE SDK so callback is defined -->
+        <script src="config.js"></script>
+        <script src="script.js"></script>
+
+        <!-- Spotify Web Playback SDK - loads AFTER script.js so callback exists -->
         <script src="https://sdk.scdn.co/spotify-player.js"></script>
 
         <!-- Player Container -->
@@ -144,8 +149,5 @@
             </section>
         </main>
     </div>
-
-    <script src="config.js"></script>
-    <script src="script.js"></script>
 </body>
 </html>

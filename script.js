@@ -3,6 +3,17 @@
 // ========================================
 
 // ========================================
+// SPOTIFY SDK CALLBACK - Define FIRST before anything else
+// ========================================
+console.log('Setting up onSpotifyWebPlaybackSDKReady callback at script load time');
+window.onSpotifyWebPlaybackSDKReady = () => {
+    console.log('✓✓✓ onSpotifyWebPlaybackSDKReady callback FIRED ✓✓✓');
+    if (window.spotifyPlayerReadyCallback) {
+        window.spotifyPlayerReadyCallback();
+    }
+};
+
+// ========================================
 // STATE MANAGEMENT
 // ========================================
 let accessToken = null;
@@ -10,6 +21,55 @@ let isAuthenticated = false;
 let spotifyPlayer = null;
 let deviceId = null;
 let currentPlayback = null;
+
+// ========================================
+// SPOTIFY SDK READY HANDLER
+// ========================================
+window.spotifyPlayerReadyCallback = function() {
+    console.log('spotifyPlayerReadyCallback triggered');
+    if (isAuthenticated && accessToken && typeof Spotify !== 'undefined') {
+        console.log('Conditions met - initializing player');
+        initializeSpotifyPlayer();
+    } else {
+        console.log('Waiting for auth before initializing. Auth:', isAuthenticated, 'Token:', !!accessToken, 'Spotify:', typeof Spotify);
+    }
+};
+
+// Poll to check if SDK loaded (fallback)
+function checkSpotifySDKLoaded() {
+    if (typeof Spotify !== 'undefined' && Spotify.Player) {
+        console.log('✓ Spotify SDK available');
+        return true;
+    }
+    console.log('Spotify SDK not available yet');
+    return false;
+}
+
+// Start checking for SDK and initializing player
+let sdkCheckInterval = null;
+function startSDKCheck() {
+    console.log('startSDKCheck called, authenticated:', isAuthenticated);
+    if (sdkCheckInterval) clearInterval(sdkCheckInterval);
+    
+    // First check if SDK is already loaded
+    if (checkSpotifySDKLoaded()) {
+        console.log('SDK already available, initializing');
+        if (isAuthenticated && accessToken) {
+            initializeSpotifyPlayer();
+        }
+        return;
+    }
+    
+    // If not loaded, poll for it
+    console.log('SDK not loaded yet, polling...');
+    sdkCheckInterval = setInterval(() => {
+        if (checkSpotifySDKLoaded() && isAuthenticated && accessToken) {
+            console.log('✓ SDK loaded and authenticated, initializing player');
+            clearInterval(sdkCheckInterval);
+            initializeSpotifyPlayer();
+        }
+    }, 500);
+}
 
 // ========================================
 // INITIALIZATION
@@ -38,7 +98,6 @@ function initializeApp() {
 function setupEventListeners() {
     const authBtn = document.getElementById('authBtn');
     const logoutBtn = document.getElementById('logoutBtn');
-    const searchForm = document.getElementById('searchForm');
 
     if (authBtn) {
         authBtn.addEventListener('click', initiateSpotifyAuth);
@@ -46,8 +105,20 @@ function setupEventListeners() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
+    
+    attachSearchFormListener();
+}
+
+function attachSearchFormListener() {
+    const searchForm = document.getElementById('searchForm');
     if (searchForm) {
+        // Remove old listener to avoid duplicates
+        searchForm.removeEventListener('submit', handleSearch);
+        // Attach new listener
         searchForm.addEventListener('submit', handleSearch);
+        console.log('Search form listener attached');
+    } else {
+        console.log('Search form not found in DOM');
     }
 }
 
@@ -165,7 +236,7 @@ async function exchangeCodeForToken(code) {
 
             showAuthSuccess();
             showMainContent();
-            initializeSpotifyPlayer();
+            startSDKCheck();
         }
     } catch (error) {
         console.error('Token exchange error:', error);
@@ -659,69 +730,121 @@ function createResultCard(item, type) {
  * Must be called after user is authenticated
  */
 function initializeSpotifyPlayer() {
-    window.onSpotifyWebPlaybackSDKReady = () => {
-        const player = new Spotify.Player({
-            name: 'Spotify API Explorer',
-            getOAuthToken: cb => { cb(accessToken); },
-            volume: 0.5
-        });
+    // Check if Spotify SDK is loaded
+    if (typeof Spotify === 'undefined' || !Spotify.Player) {
+        console.error('Spotify SDK not loaded');
+        showError('Spotify Web Playback SDK not loaded. Please refresh the page.');
+        return;
+    }
 
-        // Error handling
-        player.addListener('initialization_error', ({ message }) => {
-            console.error('Initialization Error:', message);
-            showError('Failed to initialize player: ' + message);
-        });
+    if (!accessToken) {
+        console.error('No access token available');
+        showError('No access token. Please re-authenticate.');
+        return;
+    }
 
-        player.addListener('authentication_error', ({ message }) => {
-            console.error('Authentication Error:', message);
-            showError('Player authentication failed. Please re-authenticate.');
-            handleLogout();
-        });
-
-        player.addListener('account_error', ({ message }) => {
-            console.error('Account Error:', message);
-            showError('Account error: ' + message);
-        });
-
-        // Playback status updates
-        player.addListener('player_state_changed', state => {
-            if (state) {
-                currentPlayback = state;
-                updatePlayerUI(state);
-            }
-        });
-
-        // Connect to the player
-        player.connect().then(success => {
-            if (success) {
-                console.log('Player connected successfully');
-                spotifyPlayer = player;
-                setupPlayerControls();
-                
-                // Listen for player ready event
-                player.addListener('ready', ({ device_id }) => {
-                    deviceId = device_id;
-                    console.log('Player ready with device ID:', device_id);
-                });
-                
-                // Wait for player to stabilize, then get device ID
-                setTimeout(() => {
-                    player.getCurrentState().then(state => {
-                        if (state && state.device_id) {
-                            deviceId = state.device_id;
-                            console.log('Device ID captured from state:', deviceId);
-                        } else {
-                            console.log('No device in current state, fetching available devices...');
-                            getAvailableDevices();
-                        }
-                    });
-                }, 1000);
+    const player = new Spotify.Player({
+        name: 'Spotify API Explorer',
+        getOAuthToken: cb => { 
+            console.log('getOAuthToken callback called, token:', accessToken ? 'available' : 'null');
+            if (accessToken) {
+                cb(accessToken);
             } else {
-                console.error('Failed to connect player');
-                showError('Could not connect to Spotify player. Make sure Spotify is open on this or another device and you have a Premium account.');
+                console.error('Token is null in getOAuthToken callback');
+                cb(null);
             }
-        });
-    };
+        },
+        volume: 0.5
+    });
+
+    // Error handling
+    player.addListener('initialization_error', ({ message }) => {
+        console.error('❌ Initialization Error:', message);
+        showError('Failed to initialize player: ' + message);
+    });
+
+    player.addListener('authentication_error', ({ message }) => {
+        console.error('❌ Authentication Error:', message);
+        showError('Player authentication failed. Ensure you have Spotify Premium and try re-authenticating.');
+        handleLogout();
+    });
+
+    player.addListener('account_error', ({ message }) => {
+        console.error('❌ Account Error:', message);
+        showError('Account error: ' + message);
+    });
+
+    player.addListener('playback_error', ({ message }) => {
+        console.error('❌ Playback Error:', message);
+        showError('Playback error: ' + message);
+    });
+
+    // Playback status updates
+    player.addListener('player_state_changed', state => {
+        console.log('Player state changed:', state);
+        if (state) {
+            currentPlayback = state;
+            updatePlayerUI(state);
+        }
+    });
+
+    // Connect to the player
+    console.log('🔌 Attempting to connect player... Token available:', !!accessToken);
+    
+    // Set spotifyPlayer immediately - don't wait for promise
+    spotifyPlayer = player;
+    console.log('✅ spotifyPlayer set immediately');
+    setupPlayerControls();
+    
+    // The ready event will fire when connection is successful
+    player.addListener('ready', ({ device_id }) => {
+        console.log('✅✅✅ Player READY event fired with device ID:', device_id);
+        deviceId = device_id;
+        showError('Player connected successfully!', 'success');
+    });
+    
+    player.addListener('not_ready', ({ device_id }) => {
+        console.warn('⚠️ Player not ready - connection lost');
+    });
+    
+    // Now try to connect
+    console.log('🔌 Calling player.connect()...');
+    player.connect().then(success => {
+        console.log('🔌 player.connect() promise resolved with:', success);
+        if (success) {
+            console.log('✅ Connection successful');
+            
+            // Get device ID from current state
+            setTimeout(() => {
+                player.getCurrentState().then(state => {
+                    if (state && state.device_id) {
+                        deviceId = state.device_id;
+                        console.log('✅ Device ID from state:', deviceId);
+                    } else {
+                        console.log('No device ID from player state, fetching from API...');
+                        getAvailableDevices();
+                    }
+                });
+            }, 500);
+        } else {
+            console.error('❌ player.connect() returned false');
+            console.log('Attempting to get devices from API as fallback...');
+            getAvailableDevices();
+        }
+    }).catch(error => {
+        console.error('❌ player.connect() error:', error);
+        console.log('Getting devices from API as fallback...');
+        getAvailableDevices();
+    });
+    
+    // IMPORTANT: Also try to get devices from API after a delay
+    // Sometimes the player doesn't provide device ID but the API does
+    setTimeout(() => {
+        if (!deviceId) {
+            console.log('⏱️ Timeout - still no deviceId, fetching from API...');
+            getAvailableDevices();
+        }
+    }, 2000);
 }
 
 /**
@@ -729,6 +852,7 @@ function initializeSpotifyPlayer() {
  */
 async function getAvailableDevices() {
     try {
+        console.log('📱 Fetching available devices from API...');
         const response = await fetch(`${CONFIG.API_BASE_URL}/me/player/devices`, {
             method: 'GET',
             headers: {
@@ -738,23 +862,26 @@ async function getAvailableDevices() {
         });
 
         const data = await response.json();
-        console.log('Available devices:', data.devices);
+        console.log('📱 API response:', data);
+        console.log('📱 Available devices:', data.devices);
 
         if (data.devices && data.devices.length > 0) {
+            console.log('📱 Found', data.devices.length, 'device(s)');
             // Use the first active device, or the first available device
             const activeDevice = data.devices.find(d => d.is_active);
             const targetDevice = activeDevice || data.devices[0];
             deviceId = targetDevice.id;
-            console.log('Using device:', targetDevice.name, '(ID:', deviceId + ')');
+            console.log('✅ Using device:', targetDevice.name, '(ID:', deviceId + ')');
+            showError('✅ Using device: ' + targetDevice.name);
             return targetDevice;
         } else {
-            console.warn('No devices available');
+            console.warn('⚠️ No devices available on API');
             showError('No active Spotify devices found. Open Spotify on your phone, desktop, or in another browser tab.');
             return null;
         }
     } catch (error) {
-        console.error('Error fetching devices:', error);
-        showError('Could not fetch available devices');
+        console.error('❌ Error fetching devices:', error);
+        showError('Could not fetch available devices: ' + error.message);
         return null;
     }
 }
@@ -765,32 +892,44 @@ async function getAvailableDevices() {
  * @param {Object} trackData - Track metadata for UI updates
  */
 async function playTrack(trackUri, trackData) {
+    console.log('playTrack called with URI:', trackUri);
+    
     if (!spotifyPlayer) {
+        console.error('spotifyPlayer is null');
         showError('Player not initialized. Please refresh the page.');
         return;
     }
 
+    console.log('Current deviceId:', deviceId);
+    console.log('Current spotifyPlayer:', spotifyPlayer);
+
     // If we don't have deviceId yet, try multiple methods to get it
     if (!deviceId && spotifyPlayer) {
+        console.log('Getting device ID from player state...');
         const state = await spotifyPlayer.getCurrentState();
         if (state && state.device_id) {
             deviceId = state.device_id;
             console.log('Device ID retrieved from state:', deviceId);
+        } else {
+            console.log('No device in player state:', state);
         }
     }
 
     // If still no deviceId, fetch available devices from API
     if (!deviceId) {
-        console.log('Attempting to fetch available devices...');
+        console.log('Attempting to fetch available devices from API...');
         await getAvailableDevices();
     }
 
+    console.log('DeviceId before playback:', deviceId);
+
     if (!deviceId) {
-        showError('No device ID found. Please open Spotify on a device or browser tab and try again.');
+        showError('No device ID found. Make sure Spotify is open on a device or browser tab and try again.');
         return;
     }
 
     try {
+        console.log('Sending play request to Spotify API with device:', deviceId);
         const response = await fetch(`${CONFIG.API_BASE_URL}/me/player/play`, {
             method: 'PUT',
             headers: {
@@ -803,16 +942,21 @@ async function playTrack(trackUri, trackData) {
             })
         });
 
+        console.log('Play response status:', response.status);
+
         if (response.status === 204 || response.ok) {
             console.log('Track started playing:', trackData.name);
         } else if (response.status === 404) {
+            console.error('No active device found (404)');
             showError('No active device found. Make sure Spotify is open on a device.');
         } else if (response.status === 401) {
+            console.error('Authentication expired (401)');
             showError('Authentication expired. Please re-authenticate.');
             handleLogout();
         } else {
             try {
                 const error = await response.json();
+                console.error('API error response:', error);
                 showError('Error playing track: ' + (error.error?.message || 'Unknown error'));
             } catch {
                 showError('Error playing track. Status: ' + response.status);
@@ -941,8 +1085,10 @@ function showMainContent() {
     document.getElementById('authSection').style.display = 'none';
     document.getElementById('mainContent').style.display = 'block';
     document.getElementById('profileSection').style.display = 'block';
+    attachSearchFormListener();
     showAuthSuccess();
     loadUserProfile();
+    startSDKCheck();
 }
 
 function showLoading() {
